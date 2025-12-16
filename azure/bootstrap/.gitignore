@@ -1,0 +1,15 @@
+# Terraform state and configuration
+terraform.tfvars
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# SSH keys and credentials
+*.pem
+*.key
+agent_ssh_key*
+
+# Sensitive files
+*.tfvars
+!terraform.tfvars.example

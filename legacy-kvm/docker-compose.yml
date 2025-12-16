@@ -1,0 +1,9 @@
+version: "3"
+services:
+  kvm:
+    build: ./src
+    restart: always
+    volumes:
+     - ./images:/root/images:Z
+    ports:
+     - "8080:8080"

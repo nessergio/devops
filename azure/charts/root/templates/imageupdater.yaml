@@ -1,0 +1,17 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: test-image-updater
+  namespace: argocd
+spec:
+  namespace: argocd
+  applicationRefs:
+    - namePattern: "test"
+      images:
+        - alias: "test"
+          imageName: "{{.Values.acr}}/test:{{.Values.tag}}"
+          commonUpdateSettings:
+            updateStrategy: "digest"
+            allowTags: "regexp:^{{.Values.tag}}$"
+      writeBackConfig:
+        method: "argocd"

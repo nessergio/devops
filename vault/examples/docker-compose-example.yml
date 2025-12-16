@@ -1,0 +1,115 @@
+version: '3.8'
+
+# Example: Integrating your application with Vault using Docker Compose
+
+services:
+  # Vault server
+  vault:
+    image: vault:latest
+    container_name: vault-server
+    ports:
+      - "8200:8200"
+      - "8201:8201"
+    volumes:
+      - vault-data:/vault/data
+      - ./config:/vault/config
+      # Uncomment to enable auto-unseal
+      # - ./keys.txt:/keys.txt
+    environment:
+      VAULT_ADDR: 'http://0.0.0.0:8200'
+      VAULT_API_ADDR: 'http://0.0.0.0:8200'
+    cap_add:
+      - IPC_LOCK
+    command: server
+    restart: unless-stopped
+    networks:
+      - vault-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8200/v1/sys/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Example application using envconsul
+  app-with-envconsul:
+    image: alpine:latest
+    container_name: myapp-envconsul
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: 'http://vault:8200'
+      VAULT_TOKEN: ${VAULT_TOKEN}  # Set via .env file or export
+      ENVIRONMENT: 'dev'
+      APP_NAME: 'myapp'
+    networks:
+      - vault-network
+    volumes:
+      - ./examples/envconsul.hcl:/envconsul.hcl
+    command: >
+      sh -c "
+        apk add --no-cache curl bash &&
+        wget https://releases.hashicorp.com/envconsul/0.13.2/envconsul_0.13.2_linux_amd64.zip &&
+        unzip envconsul_0.13.2_linux_amd64.zip &&
+        mv envconsul /usr/local/bin/ &&
+        echo 'Starting application with secrets from Vault...' &&
+        /usr/local/bin/envconsul -config=/envconsul.hcl \
+          -secret kv/dev/myapp \
+          -no-prefix \
+          env
+      "
+
+  # Example application using curl to fetch secrets
+  app-with-curl:
+    image: alpine:latest
+    container_name: myapp-curl
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: 'http://vault:8200'
+      VAULT_TOKEN: ${VAULT_TOKEN}
+    networks:
+      - vault-network
+    command: >
+      sh -c "
+        apk add --no-cache curl jq bash &&
+        echo 'Fetching secrets from Vault...' &&
+        SECRETS=$$(curl -s -H \"X-Vault-Token: $$VAULT_TOKEN\" \
+          http://vault:8200/v1/kv/dev/myapp) &&
+        export $$(echo $$SECRETS | jq -r '.data | to_entries | .[] | .key + \"=\" + .value') &&
+        echo 'Secrets loaded:' &&
+        env | grep -E 'DATABASE|API|SECRET' &&
+        echo 'Application would start here...' &&
+        sleep infinity
+      "
+
+  # Example Python application
+  python-app:
+    image: python:3.11-slim
+    container_name: python-vault-app
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: 'http://vault:8200'
+      VAULT_TOKEN: ${VAULT_TOKEN}
+    networks:
+      - vault-network
+    volumes:
+      - ./examples/python-vault-client.py:/app/vault_client.py
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install hvac &&
+        python vault_client.py
+      "
+
+volumes:
+  vault-data:
+    driver: local
+
+networks:
+  vault-network:
+    driver: bridge

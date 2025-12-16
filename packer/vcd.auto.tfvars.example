@@ -1,0 +1,12 @@
+# VMware Cloud Director Configuration - Example
+# Copy this file to vcd.auto.tfvars and fill in your actual credentials
+# DO NOT commit the actual tfvars file with real credentials
+
+vcd_user    = "your-username"
+vcd_pass    = "your-password-or-api-token"
+vcd_org     = "your-org-id"
+vcd_vdc     = "your-vdc-name"
+vcd_url     = "https://your-vcd-instance.com/api"
+
+vcd_allow_unverified_ssl = false
+vcd_max_retry_timeout    = 60

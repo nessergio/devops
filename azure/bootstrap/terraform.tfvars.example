@@ -1,0 +1,2 @@
+azure_devops_pat     = "<<put your PAT here>>"
+azure_devops_org_url = "https://dev.azure.com/docansn"

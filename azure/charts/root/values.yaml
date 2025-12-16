@@ -1,0 +1,7 @@
+env: Development
+acr: myorg.azurecr.io
+hostname: myapp.example.com
+tag: latest
+branch: master
+tls_secret_name: myapp-tls
+charts_repo: https://dev.azure.com/myorg/TestProject/_git/charts

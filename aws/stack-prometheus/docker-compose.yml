@@ -1,0 +1,64 @@
+version: '3'
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data: {}
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
+    volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - ./rules.yml:/etc/prometheus/rules.yml:ro
+    - prometheus_data:/prometheus
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --storage.tsdb.retention.time=7d
+    - --web.console.libraries=/etc/prometheus/console_libraries
+    - --web.console.templates=/etc/prometheus/consoles
+    - --web.enable-lifecycle
+    ports:
+    - 9090:9090
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - 9093:9093
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/config.yml
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    ports:
+    - 3000:3000
+    environment:
+    - GF_SECURITY_ADMIN_USER=admin
+    # SECURITY: Change this password in production! This is a demo/development password only
+    - GF_SECURITY_ADMIN_PASSWORD=12341234
+    - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana/
+    volumes:
+    - ./dashboards:/etc/grafana/provisioning/dashboards
+    - ./datasources:/etc/grafana/provisioning/datasources
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: always
+    ports:
+    - 9100:9100
+
+  wh:
+    image: "$REGISTRY/demo-wh:$ENVIRONMENT"
+    restart: always
+    environment:
+      - PORT=80
+      - AWS_REGION

@@ -1,0 +1,40 @@
+# Terraform files
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/*.tfstate
+**/*.tfstate.*
+
+# Credentials and secrets
+**/*.tfvars
+!**/*.tfvars.example
+**/*.auto.pkrvars.hcl
+!**/variables.example.hcl
+**/*.pem
+**/*.key
+**/agent_ssh_key*
+**/keys.txt
+
+# Build artifacts
+**/output*/
+**/packer_cache/
+**/.terraform/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Environment files
+.env
+.env.local
+**/*.env
+!**/*.env.example

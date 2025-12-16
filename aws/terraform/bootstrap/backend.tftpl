@@ -1,0 +1,20 @@
+terraform {
+  backend "s3" {
+    bucket = "${bucket_name}"
+    key    = "${bucket_key}"
+    region = "${region}"
+  }
+}
+
+variable "tags" {
+  type = map(string)
+  default = {
+    Environment = "${environment}"
+    Project     = "${project}"
+  }
+}
+
+variable "region" {
+  type    = string
+  default = "${region}"
+}

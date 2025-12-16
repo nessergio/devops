@@ -1,0 +1,80 @@
+groups:
+  - name: demo
+    rules:
+      # Alert for any instance that is unreachable for >1 minute.
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minutes."
+
+      # Alert for any instance that returns 5xx 5 times.
+      - alert: InstanceFault
+        expr: sum(rate(demo_http_response_count_total{status=~"4.."} [5m])) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} has web service fault"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} returned {{ $value }} errors for 5 minutes"
+
+      # Alert for any instance that has a median request latency >1s.
+      - alert: HighRequestLatency
+        expr: demo_http_response_time_seconds{quantile="0.9",status="200"} > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency on {{ $labels.instance }}"
+          description: "{{ $labels.instance }} has response time higher than 1s (current value: {{ $value }}s)"
+
+      # Alert for 50 req / container
+      - alert: HighRequestRate
+        expr: (sum(rate(demo_http_response_count_total[1m])) by (instance))/(sum(engine_daemon_container_states_containers{state='running'}-5) by (instance)) > 50
+        for: 1s
+        labels:
+          severity: critical
+          doaction: "true"
+          instance: "{{ $labels.instance }}"
+          action: "container-up"
+        annotations:
+          summary: "High request rate on {{ $labels.instance }}"
+          description: "{{ $labels.instance }} has request rate per container {{ $value }})"
+
+      # Alert for 1 req / container
+      - alert: LowRequestRate
+        expr: (sum(rate(demo_http_response_count_total[1m])) by (instance))/(sum(engine_daemon_container_states_containers{state='running'}-5) by (instance)) <= 1
+        for: 100s
+        labels:
+          severity: critical
+          doaction: "true"
+          instance: "{{ $labels.instance }}"
+          action: "container-down"
+        annotations:
+          summary: "Low request rate on {{ $labels.instance }}"
+          description: "{{ $labels.instance }} has request rate per container {{ $value }})"
+
+      # Alert for 50% CPU load
+      - alert: HighCPU
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode='idle'}[1m])) by (instance) * 100) > 50
+        for: 10s
+        labels:
+          severity: critical
+          doaction: "true"
+          action: "worker-up"
+        annotations:
+          summary: "High CPU load {{ $labels.instance }}"
+
+      # Alert for 1% CPU load
+      - alert: LowCPU
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode='idle'}[1m])) by (instance) * 100) <= 1
+        for: 100s
+        labels:
+          severity: critical
+          doaction: "true"
+          action: "worker-down"
+        annotations:
+          summary: "Low CPU load on {{ $labels.instance }}"

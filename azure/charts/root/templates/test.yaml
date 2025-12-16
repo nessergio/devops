@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test
+  namespace: argocd
+spec:
+  project: default
+  source:
+    path: test
+    repoURL: {{.Values.charts_repo}}
+    targetRevision: {{.Values.branch}}
+    helm:
+      values: |
+        image: 
+          repository: {{.Values.acr}}/test
+          tag: {{.Values.tag}}
+        ingress:
+          hosts:
+            - host: {{.Values.hostname}}
+              paths:
+                - path: /
+                  pathType: Prefix
+          tls:
+            - secretName: {{.Values.tls_secret_name}}
+              hosts:
+                - {{.Values.hostname}}
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true 
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+

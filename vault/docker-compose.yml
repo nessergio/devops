@@ -1,0 +1,26 @@
+services:
+  server:
+    # Vault server image
+    # Replace with your container registry or use official image: hashicorp/vault:latest
+    # Example Azure ACR: yourregistry.azurecr.io/vault:latest
+    # Example Docker Hub: hashicorp/vault:1.15.0
+    image: hashicorp/vault:latest
+
+    volumes:
+      # Mount local directories for persistent data and configuration
+      # Replace paths with your desired local directories
+      - ./data:/vault/data      # Example: Vault data directory
+      - ./config:/vault/config  # Example: Vault configuration directory
+
+    ports:
+      - "8200:8200"  # API port
+      - "8201:8201"  # Cluster port
+
+    cap_add:
+      # Required for mlock support (prevents memory from being swapped to disk)
+      - IPC_LOCK
+
+    command:
+      - server
+
+    restart: always

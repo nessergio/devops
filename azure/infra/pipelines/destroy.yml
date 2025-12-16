@@ -1,0 +1,156 @@
+name: "Infrastructure - Destroy ACR"
+
+# This pipeline is ONLY triggered manually
+trigger: none
+pr: none
+
+variables:
+  - name: terraformVersion
+    value: "latest"
+  - name: serviceConnection
+    value: "Azure-ServiceConnection"
+
+pool:
+  name: "Default"
+  vmImage: "ubuntu-latest"
+
+stages:
+  - stage: ValidateDestroy
+    displayName: "Validate Destroy Operation"
+    jobs:
+      - job: ValidateDestroy
+        displayName: "Show Resources to be Destroyed"
+        steps:
+          - task: TerraformInstaller@1
+            displayName: "Install Terraform"
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: "Terraform Init"
+            inputs:
+              provider: "azurerm"
+              command: "init"
+              workingDirectory: "$(System.DefaultWorkingDirectory)"
+              backendServiceArm: $(serviceConnection)
+              backendAzureRmResourceGroupName: $(TF_STATE_RESOURCE_GROUP)
+              backendAzureRmStorageAccountName: $(TF_STATE_STORAGE_ACCOUNT)
+              backendAzureRmContainerName: $(TF_STATE_CONTAINER_NAME)
+              backendAzureRmKey: $(TF_STATE_KEY)
+
+          - task: TerraformTaskV4@4
+            displayName: "Terraform Plan Destroy"
+            inputs:
+              provider: "azurerm"
+              command: "plan"
+              workingDirectory: "$(System.DefaultWorkingDirectory)"
+              commandOptions: "-destroy -out=tfdestroy -var-file=terraform.tfvars"
+              environmentServiceNameAzureRM: $(serviceConnection)
+            env:
+              TF_VAR_project_id: $(System.TeamProjectId)
+              TF_VAR_azdo_pat: $(AZDO_PERSONAL_ACCESS_TOKEN)
+              AZDO_PERSONAL_ACCESS_TOKEN: $(AZDO_PERSONAL_ACCESS_TOKEN)
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish Destroy Plan"
+            inputs:
+              targetPath: "$(System.DefaultWorkingDirectory)/tfdestroy"
+              artifact: "tfdestroy"
+              publishLocation: "pipeline"
+
+  - stage: ApprovalGate
+    displayName: "Approval Required"
+    dependsOn: ValidateDestroy
+    condition: succeeded()
+    jobs:
+      - job: WaitForApproval
+        displayName: "Waiting for Manual Approval"
+        pool: server
+        timeoutInMinutes: 4320 # 3 days
+        steps:
+          - task: ManualValidation@0
+            displayName: "Manual Approval to Destroy Infrastructure"
+            inputs:
+              notifyUsers: |
+                $(Build.RequestedForEmail)
+              instructions: |
+                ⚠️ WARNING: DESTRUCTIVE OPERATION ⚠️
+
+                This pipeline will DESTROY the following resources:
+                - Azure Container Registry
+                - Resource Group
+                - All associated resources
+
+                Please review the destroy plan in the previous stage before approving.
+
+                This action CANNOT be undone!
+
+                Are you absolutely sure you want to proceed?
+              onTimeout: "reject"
+
+  - stage: Destroy
+    displayName: "Destroy Infrastructure"
+    dependsOn: ApprovalGate
+    condition: succeeded()
+    jobs:
+      - deployment: Destroy
+        displayName: "Terraform Destroy"
+        environment: "production"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: TerraformInstaller@1
+                  displayName: "Install Terraform"
+                  inputs:
+                    terraformVersion: $(terraformVersion)
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: "Download Destroy Plan"
+                  inputs:
+                    buildType: "current"
+                    artifactName: "tfdestroy"
+                    targetPath: "$(System.DefaultWorkingDirectory)"
+
+                - task: TerraformTaskV4@4
+                  displayName: "Terraform Init"
+                  inputs:
+                    provider: "azurerm"
+                    command: "init"
+                    workingDirectory: "$(System.DefaultWorkingDirectory)"
+                    backendServiceArm: $(serviceConnection)
+                    backendAzureRmResourceGroupName: $(TF_STATE_RESOURCE_GROUP)
+                    backendAzureRmStorageAccountName: $(TF_STATE_STORAGE_ACCOUNT)
+                    backendAzureRmContainerName: $(TF_STATE_CONTAINER_NAME)
+                    backendAzureRmKey: $(TF_STATE_KEY)
+
+                - task: TerraformTaskV4@4
+                  displayName: "Terraform Destroy"
+                  inputs:
+                    provider: "azurerm"
+                    command: "apply"
+                    workingDirectory: "$(System.DefaultWorkingDirectory)"
+                    commandOptions: "tfdestroy"
+                    environmentServiceNameAzureRM: $(serviceConnection)
+                  env:
+                    AZDO_PERSONAL_ACCESS_TOKEN: $(AZDO_PERSONAL_ACCESS_TOKEN)
+
+                - task: Bash@3
+                  displayName: "Post-Destroy Notification"
+                  inputs:
+                    targetType: "inline"
+                    script: |
+                      echo "================================================"
+                      echo "Infrastructure has been successfully destroyed!"
+                      echo "================================================"
+                      echo ""
+                      echo "Destroyed resources:"
+                      echo "  - Azure Container Registry"
+                      echo "  - Azure Kubernetes Cluster"
+                      echo "  - Resource Group"
+                      echo "  - Service Connections"
+                      echo ""
+                      echo "State file remains in Azure Storage for audit purposes."
+                      echo "================================================"

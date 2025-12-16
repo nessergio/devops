@@ -1,0 +1,71 @@
+version: "3"
+services:
+  service-a:
+    restart: always
+    image: "$REGISTRY/demo-service-a:$ENVIRONMENT"
+    environment:
+    - MAX_CONN=100
+    expose:
+    - 3000
+
+  nginx:
+    image: nginx:1.25
+    restart: always
+    volumes:
+    - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    - ./public:/var/www/public:ro
+    - ./access.log:/var/log/nginx/access.log
+    depends_on:
+    - service-a
+    ports:
+    - 80:80
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:0.8.0
+    restart: always
+    command: ['-nginx.scrape-uri', 'http://nginx/metrics', '-nginx.retries=10']
+    ports:
+    - 9113:9113
+
+  nginxlogs-exporter:
+    image: quay.io/martinhelmich/prometheus-nginxlog-exporter
+    command: ["-config-file", "/etc/config.yml"]
+    volumes: 
+    - ./nginxlogsexp.yml:/etc/config.yml
+    - ./access.log:/var/log/nginx/access.log
+    ports:
+    - 9114:9114
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: always
+    volumes:
+    - /proc:/host/proc:ro
+    - /sys:/host/sys:ro
+    - /:/rootfs:ro
+    command:
+    - '--path.procfs=/host/proc'
+    - '--path.rootfs=/rootfs'
+    - '--path.sysfs=/host/sys'
+    - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+    - 9100:9100
+
+  exporter-merger:
+    image: quay.io/rebuy/exporter-merger:v0.2.0
+    ports: 
+    - 8080:8080
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    environment:
+      MERGER_URLS: |
+        http://node-exporter:9100/metrics
+        http://nginx-exporter:9113/metrics
+        http://nginxlogs-exporter:9114/metrics
+        http://host.docker.internal:9323/metrics
+  
+networks:
+  default:
+    driver: bridge
+    name: demo

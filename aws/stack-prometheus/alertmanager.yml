@@ -1,0 +1,38 @@
+route:
+  group_by:
+    - alertname
+  group_wait: 10s
+  group_interval: 1m
+
+  receiver: telegram
+
+  routes:
+    # This routes performs a regular expression match on alert labels to
+    # catch alerts that are related to a list of services.
+    - matchers:
+        - doaction="true"
+      receiver: webhook
+      continue: true
+    - matchers:
+        - severity="critical"
+      receiver: telegram
+      continue: true
+
+receivers:
+  - name: "telegram"
+    telegram_configs:
+      # SECURITY: Replace with your own bot token and chat ID
+      # Get bot token from @BotFather on Telegram
+      # Get chat ID from @userinfobot or your bot's messages
+      - bot_token: YOUR_TELEGRAM_BOT_TOKEN_HERE
+        api_url: https://api.telegram.org
+        chat_id: YOUR_TELEGRAM_CHAT_ID_HERE
+        parse_mode: ""
+
+  - name: "webhook"
+    webhook_configs:
+      - url: http://wh
+# To test:
+# amtool --alertmanager.url=http://localhost:9093/ alert add alertname="test" severity="warning" job="test-alert" instance="localhost" cluster="test" action="up"
+# docker exec -i $(docker ps -qf "name=demo-alertmanager-1") amtool --alertmanager.url=http://localhost:9093/ alert add alertname="test" severity="warning" job="test-alert" instance="localhost" cluster="test" action="up"
+# docker logs $(docker ps -qf "name=demo-wh-1")

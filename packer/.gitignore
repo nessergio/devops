@@ -1,0 +1,24 @@
+# Build artifacts
+old
+output*
+packer_cache
+*.old
+
+# Terraform files
+.terraform*
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Credentials and secrets
+*.auto.tfvars
+*.auto.pkrvars.hcl
+vcd.tf
+variables.*.hcl
+!variables.example.hcl
+
+# OS files
+.DS_Store
+Thumbs.db

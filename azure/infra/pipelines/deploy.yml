@@ -1,0 +1,142 @@
+name: "Infrastructure - Init with Terraform"
+
+trigger:
+  - master
+
+pool:
+  name: "Default"
+  vmImage: "ubuntu-latest"
+
+variables:
+  - name: terraformVersion
+    value: "latest"
+  - name: serviceConnection
+    value: "Azure-ServiceConnection"
+stages:
+  - stage: Validate
+    displayName: "Validate Terraform"
+    jobs:
+      - job: Validate
+        displayName: "Validate"
+        steps:
+          - task: TerraformInstaller@1
+            displayName: "Install Terraform"
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: "Terraform Init"
+            inputs:
+              command: "init"
+              workingDirectory: "$(System.DefaultWorkingDirectory)"
+              backendServiceArm: $(serviceConnection)
+              backendAzureRmResourceGroupName: $(TF_STATE_RESOURCE_GROUP)
+              backendAzureRmStorageAccountName: $(TF_STATE_STORAGE_ACCOUNT)
+              backendAzureRmContainerName: $(TF_STATE_CONTAINER_NAME)
+              backendAzureRmKey: $(TF_STATE_KEY)
+
+          - script: |
+              terraform -v
+              terraform init
+              terraform fmt -check -recursive
+              terraform validate
+
+  - stage: Plan
+    displayName: "Plan Infrastructure"
+    dependsOn: Validate
+    condition: succeeded()
+    jobs:
+      - job: Plan
+        displayName: "Terraform Plan"
+        steps:
+          - task: TerraformInstaller@1
+            displayName: "Install Terraform"
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: "Terraform Init"
+            inputs:
+              command: "init"
+              workingDirectory: "$(System.DefaultWorkingDirectory)"
+              backendServiceArm: $(serviceConnection)
+              backendAzureRmResourceGroupName: $(TF_STATE_RESOURCE_GROUP)
+              backendAzureRmStorageAccountName: $(TF_STATE_STORAGE_ACCOUNT)
+              backendAzureRmContainerName: $(TF_STATE_CONTAINER_NAME)
+              backendAzureRmKey: $(TF_STATE_KEY)
+
+          - task: TerraformTaskV4@4
+            displayName: "Terraform Plan"
+            inputs:
+              provider: "azurerm"
+              command: "plan"
+              workingDirectory: "$(System.DefaultWorkingDirectory)"
+              commandOptions: "-out=tfplan -var-file=terraform.tfvars"
+              environmentServiceNameAzureRM: $(serviceConnection)
+            env:
+              AZDO_PERSONAL_ACCESS_TOKEN: $(AZDO_PERSONAL_ACCESS_TOKEN)
+              TF_VAR_azdo_pat: $(AZDO_PERSONAL_ACCESS_TOKEN)
+              TF_VAR_project_id: $(System.TeamProjectId)
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish Plan Artifact"
+            inputs:
+              targetPath: "$(System.DefaultWorkingDirectory)/tfplan"
+              artifact: "tfplan"
+              publishLocation: "pipeline"
+
+  - stage: Apply
+    displayName: "Apply Infrastructure"
+    dependsOn: Plan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+    jobs:
+      - deployment: Apply
+        displayName: "Terraform Apply"
+        environment: "production"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: TerraformInstaller@1
+                  displayName: "Install Terraform"
+                  inputs:
+                    terraformVersion: $(terraformVersion)
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: "Download Plan Artifact"
+                  inputs:
+                    buildType: "current"
+                    artifactName: "tfplan"
+                    targetPath: "$(System.DefaultWorkingDirectory)"
+
+                - task: TerraformTaskV4@4
+                  displayName: "Terraform Init"
+                  inputs:
+                    command: "init"
+                    workingDirectory: "$(System.DefaultWorkingDirectory)"
+                    backendServiceArm: $(serviceConnection)
+                    backendAzureRmResourceGroupName: $(TF_STATE_RESOURCE_GROUP)
+                    backendAzureRmStorageAccountName: $(TF_STATE_STORAGE_ACCOUNT)
+                    backendAzureRmContainerName: $(TF_STATE_CONTAINER_NAME)
+                    backendAzureRmKey: $(TF_STATE_KEY)
+
+                - task: TerraformTaskV4@4
+                  displayName: "Terraform Apply"
+                  inputs:
+                    provider: "azurerm"
+                    command: "apply"
+                    workingDirectory: "$(System.DefaultWorkingDirectory)"
+                    commandOptions: "tfplan"
+                    environmentServiceNameAzureRM: $(serviceConnection)
+                  env:
+                    AZDO_PERSONAL_ACCESS_TOKEN: $(AZDO_PERSONAL_ACCESS_TOKEN)
+
+                - task: TerraformTaskV4@4
+                  displayName: "Terraform Output"
+                  inputs:
+                    provider: "azurerm"
+                    command: "output"
+                    workingDirectory: "$(System.DefaultWorkingDirectory)"
+                    environmentServiceNameAzureRM: $(serviceConnection)

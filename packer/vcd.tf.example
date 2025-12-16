@@ -1,0 +1,58 @@
+terraform {
+  required_providers {
+    vcd = {
+      source  = "vmware/vcd"
+      version = "~> 3.11.0"
+    }
+  }
+}
+
+provider "vcd" {
+  user                 = var.vcd_user
+  password             = var.vcd_pass
+  auth_type            = "integrated"
+  org                  = var.vcd_org
+  vdc                  = var.vcd_vdc
+  url                  = var.vcd_url
+  max_retry_timeout    = var.vcd_max_retry_timeout
+  allow_unverified_ssl = var.vcd_allow_unverified_ssl
+}
+
+variable "vcd_user" {
+   type        = string
+   description = "VMware Cloud Director username"
+   sensitive   = true
+}
+
+variable "vcd_pass" {
+   type        = string
+   description = "VMware Cloud Director password or API token"
+   sensitive   = true
+}
+
+variable "vcd_org" {
+   type        = string
+   description = "VMware Cloud Director organization ID"
+}
+
+variable "vcd_vdc" {
+   type        = string
+   description = "VMware Cloud Director VDC name"
+}
+
+variable "vcd_url" {
+   type        = string
+   description = "VMware Cloud Director API URL"
+}
+
+variable "vcd_allow_unverified_ssl" {
+  type        = bool
+  default     = false
+  description = "Allow unverified SSL certificates"
+}
+
+variable "vcd_max_retry_timeout" {
+  type        = number
+  default     = 60
+  description = "Maximum retry timeout in seconds"
+}
